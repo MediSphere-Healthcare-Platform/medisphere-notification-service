@@ -7,6 +7,8 @@ import com.medisphere.notification.repository.NotificationRepository;
 import com.medisphere.notification.service.NotificationService;
 import org.springframework.beans.BeanUtils;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.mail.SimpleMailMessage;
+import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -18,11 +20,22 @@ public class NotificationServiceImpl implements NotificationService {
     @Autowired
     private NotificationRepository notificationRepository;
 
+    @Autowired
+    private JavaMailSender mailSender;
+
     @Override
     public Notification createNotification(NotificationRequest notificationRequest) {
         Notification notification = new Notification();
         BeanUtils.copyProperties(notificationRequest, notification);
-        return notificationRepository.save(notification);
+        
+        Notification savedNotification = notificationRepository.save(notification);
+        System.out.println("Notification saved to DB for: " + notification.getUserId());
+        
+        // Send Email
+        System.out.println("Attempting to send email to " + notification.getUserId() + "...");
+        sendEmail(notification.getUserId(), notification.getTitle(), notification.getMessage());
+        
+        return savedNotification;
     }
 
     @Override
@@ -65,7 +78,21 @@ public class NotificationServiceImpl implements NotificationService {
         Notification notification = new Notification();
         BeanUtils.copyProperties(notificationRequest, notification);
         notification.setBroadcast(true);
-        notification.setUserId(null); // Broadcast notifications don't have a specific user
+        notification.setUserId(null);
         return notificationRepository.save(notification);
+    }
+
+    private void sendEmail(String to, String subject, String text) {
+        try {
+            SimpleMailMessage message = new SimpleMailMessage();
+            message.setFrom("bawantha2819@gmail.com");
+            message.setTo(to);
+            message.setSubject(subject);
+            message.setText(text);
+            mailSender.send(message);
+            System.out.println("Email sent successfully to " + to);
+        } catch (Exception e) {
+            System.err.println("Failed to send email to " + to + ": " + e.getMessage());
+        }
     }
 }
