@@ -1,5 +1,7 @@
 package com.medisphere.notification.service.impl;
 
+import com.medisphere.notification.client.AuthClient;
+import com.medisphere.notification.dto.ApiResponse;
 import com.medisphere.notification.dto.NotificationRequest;
 import com.medisphere.notification.entity.Notification;
 import com.medisphere.notification.exception.ResourceNotFoundException;
@@ -23,17 +25,44 @@ public class NotificationServiceImpl implements NotificationService {
     @Autowired
     private JavaMailSender mailSender;
 
+    @Autowired
+    private AuthClient authClient;
+
     @Override
     public Notification createNotification(NotificationRequest notificationRequest) {
         Notification notification = new Notification();
         BeanUtils.copyProperties(notificationRequest, notification);
         
-        Notification savedNotification = notificationRepository.save(notification);
-        System.out.println("Notification saved to DB for: " + notification.getUserId());
+        // Logic to automatically resolve msUserId to real Email
+        String targetEmail = notification.getUserId();
+        if (targetEmail != null && (targetEmail.startsWith("UD") || targetEmail.startsWith("UP"))) {
+            try {
+                System.out.println("Wait! Receiving ID: " + targetEmail + ". Checking Auth Service for email...");
+                var response = authClient.getEmailByMsUserId(targetEmail);
+                if (response.getBody() != null && "SUCCESS".equals(response.getBody().getStatus())) {
+                    targetEmail = response.getBody().getData();
+                    System.out.println("Success! Found email: " + targetEmail);
+                    // Update the notification record to store the real email
+                    notification.setUserId(targetEmail);
+                } else {
+                    System.err.println("Failed to resolve ID " + targetEmail + ": " + 
+                        (response.getBody() != null ? response.getBody().getMessage() : "User not found"));
+                }
+            } catch (Exception e) {
+                System.err.println("Auth Service lookup failed: " + e.getMessage());
+            }
+        }
         
-        // Send Email
-        System.out.println("Attempting to send email to " + notification.getUserId() + "...");
-        sendEmail(notification.getUserId(), notification.getTitle(), notification.getMessage());
+        Notification savedNotification = notificationRepository.save(notification);
+        System.out.println("Notification record created for: " + notification.getUserId());
+        
+        // Send actual email ONLY if we have a valid email address (contains @)
+        if (targetEmail != null && targetEmail.contains("@")) {
+            sendEmail(targetEmail, notification.getTitle(), notification.getMessage());
+        } else {
+            System.err.println("Aborting email send: Address '" + targetEmail + "' is not a valid email. " +
+                "This usually means the ID lookup failed or Eureka is still syncing.");
+        }
         
         return savedNotification;
     }
