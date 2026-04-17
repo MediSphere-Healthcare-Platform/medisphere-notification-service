@@ -20,7 +20,7 @@ public class NotificationController {
     @Autowired
     private NotificationService notificationService;
 
-    @PostMapping
+    @PostMapping("/create")
     public ResponseEntity<NotificationResponse> createNotification(@RequestBody NotificationRequest notificationRequest) {
         Notification notification = notificationService.createNotification(notificationRequest);
         return new ResponseEntity<>(new NotificationResponse(notification), HttpStatus.CREATED);
@@ -41,7 +41,7 @@ public class NotificationController {
         return ResponseEntity.ok(notificationService.getNotificationsByRole(role));
     }
 
-    @GetMapping
+    @GetMapping("getAllNotifications")
     public ResponseEntity<List<Notification>> getAllNotifications() {
         return ResponseEntity.ok(notificationService.getAllNotifications());
     }
